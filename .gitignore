@@ -1,0 +1,13 @@
+.devcontainer/
+.vscode/
+.svelte-kit/
+.vite/
+node_modules/
+/build
+*.tgz
+.env
+.env.*
+logs
+*.log
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
