@@ -9,7 +9,7 @@ npx svseeds-cli
 
 ### Deno
 ```
-deno run @svseeds/cli
+deno run jsr:@svseeds/cli
 ```
 
 ## Basic Usage

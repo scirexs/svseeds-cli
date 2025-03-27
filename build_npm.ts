@@ -4,7 +4,11 @@ import packageInfo from "./deno.json" with { type: "json" };
 await emptyDir("./npm");
 
 await build({
-  entryPoints: ["./mod.ts"],
+  entryPoints: [{
+    kind: "bin",
+    name: "svseeds-cli",
+    path: "./mod.ts"
+  }],
   outDir: "./npm",
   scriptModule: false,
   typeCheck: false,
