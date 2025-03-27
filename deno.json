@@ -1,6 +1,6 @@
 {
   "name": "@svseeds/cli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "exports": "./mod.ts",
   "publish": {
@@ -11,6 +11,7 @@
       "LICENSE"
     ]
   },
+  "nodeModulesDir": "auto",
   "lint": {
     "include": ["src/", "tests/"],
     "rules": {

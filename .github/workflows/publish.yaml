@@ -14,16 +14,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # - name: Setup Node.js
-      #   uses: actions/setup-node@v4
-      #   with:
-      #     node-version: "lts/*"
-      #     registry-url: "https://registry.npmjs.org"
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
-      # - name: Publish to npm
-      #   run: npm publish --provenance
-      #   env:
-      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Translate by dnt
+        run: deno run -A ./build_npm.ts
+
+      - name: Publish to npm
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
 
       - name: Publish to jsr
         run: npx jsr publish

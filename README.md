@@ -19,23 +19,23 @@ COMMAND [component names...]
 ```
 
 ## Options
-- Specify directory:
+### Specify directory
 ```
 COMMAND -d <directory> [component names...]
 ```
 
-- Specify all components:
+### Specify all components
 ```
 COMMAND --all
 ```
 
-- Update copied components:
+### Update copied components
+**This option will overwrite the files**
 ```
 COMMAND -u [component names...]
 ```
-**This option will overwrite the files**
 
-- Run without interactions:
+### Run without interactions
 ```
 COMMAND --no-confirm [component names...]
 ```

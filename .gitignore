@@ -4,6 +4,7 @@
 .vite/
 node_modules/
 /build
+/npm
 *.tgz
 .env
 .env.*
