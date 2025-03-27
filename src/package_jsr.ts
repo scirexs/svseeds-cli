@@ -1,3 +1,6 @@
+import * as p from "jsr:@std/path@^1.0.8";
+import { UntarStream } from "jsr:@std/tar@^0.1.6";
+
 type PackageMeta = {
   scope: string;
   name: string;
@@ -5,7 +8,7 @@ type PackageMeta = {
   tgz: string;
   versions: string[];
 };
-export class JSRPackage {
+export class Package {
   #JSR = "jsr.io";
   #NPM = "npm.jsr.io";
   #scope;
@@ -28,11 +31,17 @@ export class JSRPackage {
     const data = new Uint8Array(await (await this.#fetch(this.#getJsrBaseUrl() + urlPath)).arrayBuffer());
     Deno.writeFileSync(path, data);
   }
-  async getMetaInfo(): Promise<JSRPackage> {
+  async getMetaInfo(): Promise<Package> {
     if (!this.#meta) this.#meta = await this.#getJsrMeta();
     return this;
   }
 
+  get scope(): string {
+    return this.#scope;
+  }
+  get name(): string {
+    return this.#name;
+  }
   get latest(): string {
     return this.#meta?.latest ?? "";
   }
@@ -70,7 +79,48 @@ export class JSRPackage {
   }
   async #fetch(url: string): Promise<Response> {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`fetch failed [${res.status}] ${res.statusText}`);
+    if (!res.ok) throw new Error(`error: fetch failed [${res.status}] ${res.statusText}`);
     return res;
+  }
+}
+
+export class TempPackage {
+  static DIR = "package";
+  #jsr: Package;
+  #tmp = "";
+
+  constructor(scope: string, name: string) {
+    this.#jsr = new Package(scope, name);
+  }
+  async remove() {
+    if (this.#tmp) await Deno.remove(this.#tmp, { recursive: true });
+  }
+  async download(): Promise<string> {
+    await this.#makeTempDir();
+    return await this.#downloadPackage();
+  }
+  async #makeTempDir() {
+    this.#tmp = await Deno.makeTempDir({ prefix: `${this.#jsr.scope}_${this.#jsr.name}_` });
+    if (!this.#tmp) throw new Error(`error: failed to create temporary directory`);
+  }
+  async #downloadPackage(): Promise<string> {
+    const file = `${this.#jsr.scope}-${this.#jsr.name}.tgz`;
+    const tgz = p.join(this.#tmp, file);
+    await this.#jsr.downloadPackage(tgz);
+    await decompress(tgz);
+    return p.join(this.#tmp, TempPackage.DIR);
+  }
+}
+
+export async function decompress(tgzPath: string) {
+  const dir = p.dirname(tgzPath);
+  for await (
+    const entry of (await Deno.open(tgzPath)).readable
+      .pipeThrough(new DecompressionStream("gzip"))
+      .pipeThrough(new UntarStream())
+  ) {
+    const target = p.normalize(p.join(dir, entry.path));
+    Deno.mkdirSync(p.dirname(target), { recursive: true });
+    await entry.readable?.pipeTo((await Deno.create(target)).writable);
   }
 }
