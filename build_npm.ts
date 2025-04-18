@@ -17,6 +17,10 @@ await build({
   shims: {
     deno: true,
   },
+  compilerOptions: {
+    lib: ["ES2023"],
+    target: "ES2023"
+  },
   package: {
     name: "svseeds-cli",
     version: packageInfo.version,
