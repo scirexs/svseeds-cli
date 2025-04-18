@@ -72,7 +72,7 @@ class Cli {
     this.#spec = new Set(spec);
   }
   async confirm() {
-    if (this.#opts.confirm) await this.#dest.confirm(this.#opts.confirm);
+    if (this.#opts.confirm) await this.#dest.confirm();
   }
   async run(avails: Components) {
     const selects = await this.#select(avails);
@@ -257,13 +257,10 @@ class Destination {
       return;
     }
   }
-  async confirm(update: boolean) {
-    if (this.#exists && !this.#files.length) return;
-    if (this.#exists && !update) return;
-    const info = this.#exists ? "File already exists in the directory." : `Directory not found: ${this.#getRelativePath()}`;
-    const message = this.#exists ? "Do you want to proceed?" : "Create directory and proceed?";
-    log.info(info);
-    const result = await confirm({ message });
+  async confirm() {
+    if (this.#exists) return;
+    log.info(`Directory not found: ${this.#getRelativePath()}`);
+    const result = await confirm({ message: "Create directory and proceed?" });
     if (isCancel(result) || !result) Flow.cancel();
   }
   getExists(files: string[]): string[] {
