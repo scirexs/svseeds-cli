@@ -1,7 +1,16 @@
 import * as p from "jsr:@std/path@^1.0.8";
-import { cyan, red, yellow } from "jsr:@std/fmt@^1.0.6/colors";
 import { Command } from "jsr:@cliffy/command@1.0.0-rc.7";
-import { Checkbox, type CheckboxOption, type CheckboxOptions, Toggle } from "jsr:@cliffy/prompt@1.0.0-rc.7";
+import {
+  cancel,
+  confirm,
+  intro,
+  isCancel,
+  log,
+  multiselect,
+  type MultiSelectOptions,
+  type Option,
+  outro,
+} from "npm:@clack/prompts@^0.10.1";
 import { ProjectRoot } from "./project_root.ts";
 import { TempPackage } from "./package_jsr.ts";
 import packageInfo from "../deno.json" with { type: "json" };
@@ -17,7 +26,7 @@ type DependencyObject = {
 
 /** Entrypoint of svseeds-cli. */
 export default async function main() {
-  const log = new Log();
+  const flow = new Flow();
   const pkg = new TempPackage("svseeds", "ui");
 
   try {
@@ -28,10 +37,10 @@ export default async function main() {
     const avails = new Components(await pkg.download());
     await cli.run(avails);
   } catch (e) {
-    log.show(e);
+    flow.showError(e);
   } finally {
     await pkg.remove();
-    log.exitError();
+    flow.exitError();
   }
 }
 
@@ -67,7 +76,7 @@ class Cli {
   }
   async run(avails: Components) {
     const selects = await this.#select(avails);
-    if (!selects.length) Log.error("no components specified");
+    if (!selects.length) Flow.error("no components specified");
     const reqs = avails.getRequiredFiles(selects);
     Cli.#showResult(this.#handleFiles(reqs, avails.dir, this.#dest.dir));
   }
@@ -75,11 +84,11 @@ class Cli {
     if (this.#opts.all) return avails.files;
     if (this.#spec.size) return this.#getExistFiles(avails.getSpecFiles(this.#spec));
     if (!this.#opts.confirm) return [];
-    return await Cli.showCheckboxPrompt(avails.getCheckboxOptions(this.#dest.files, this.#opts.update));
+    return await Cli.showCheckboxPrompt(avails.getMultiSelectOptions(this.#dest.files, this.#opts.update));
   }
   #getExistFiles(map: StringMap): string[] {
     const ignore = [...map.entries().filter(([_, v]) => !v).map(([k, _]) => k)];
-    if (ignore.length) Log.warn(`components does not exist: ${ignore.join(", ")}`);
+    if (ignore.length) Flow.warn(`components does not exist: ${ignore.join(", ")}`);
     ignore.forEach((x) => map.delete(x));
     return [...map.values()];
   }
@@ -87,7 +96,7 @@ class Cli {
     const exists = this.#dest.getExists(reqs);
     if (this.#opts.update) return Cli.copyFiles(exists, from, to);
 
-    if (exists.length) Log.warn(`skip exist files: ${exists.join(", ")}`);
+    if (exists.length) Flow.warn(`skip exist files: ${exists.join(", ")}`);
     return Cli.copyFiles(reqs.filter((x) => !exists.includes(x)), from, to);
   }
 
@@ -98,24 +107,24 @@ class Cli {
     return true;
   }
   static showTitle() {
-    console.log("SvSeeds CLI");
+    intro("SvSeeds CLI");
   }
   static #showResult(done: boolean) {
     if (done) {
-      console.log(cyan("Files copied successfully!!"));
+      outro("Files copied successfully!!");
     } else {
-      console.log(yellow("Files not copied."));
+      outro("Files not copied.");
     }
   }
-  static async showCheckboxPrompt(options: CheckboxOption<string>[]): Promise<string[]> {
-    const args: CheckboxOptions<string> = {
+  static async showCheckboxPrompt(options: Option<string>[]): Promise<string[]> {
+    const args: MultiSelectOptions<string> = {
       message: "Select components.",
       options,
-      check: "☑",
-      uncheck: "☐",
-      minOptions: 1,
+      required: true,
     };
-    return await Checkbox.prompt(args);
+    const selected = await multiselect(args);
+    if (isCancel(selected)) Flow.cancel();
+    return selected as string[];
   }
 }
 
@@ -150,12 +159,12 @@ class Components {
   getRequiredFiles(files: string[]): string[] {
     return [...this.#resolver.getRequiredFiles(Components.#adjustCoreFiles(files, true)).keys()];
   }
-  getCheckboxOptions(exists: string[], update: boolean): CheckboxOption<string>[] {
+  getMultiSelectOptions(exists: string[], update: boolean): Option<string>[] {
     const files = update ? exists.filter((x) => this.#files.has(x)) : [...this.#files.keys().filter((x) => !exists.includes(x))];
     const lists = Components.#adjustCoreFiles(files, false);
     Components.#validateAvailables(lists, update);
-    if (!lists.length) Log.error("no files available");
-    return lists.map((x) => ({ name: Components.#getLabelText(x), value: x }));
+    if (!lists.length) Flow.error("no files available");
+    return lists.map((x) => ({ label: Components.#getLabelText(x), value: x })).toSorted((x, y) => x.label.localeCompare(y.label));
   }
 
   static #adjustCoreFiles(files: string[], core: boolean): string[] {
@@ -165,9 +174,9 @@ class Components {
   static #validateAvailables(lists: string[], update: boolean) {
     if (lists.length) return;
     if (update) {
-      Log.error("svseeds files are not exist");
+      Flow.error("svseeds files are not exist");
     } else {
-      Log.error("all svseeds files are already exist");
+      Flow.error("all svseeds files are already exist");
     }
   }
   static #getKeyText(file: string): string {
@@ -249,10 +258,12 @@ class Destination {
     }
   }
   async confirm() {
-    if (this.#exists) return;
-    const message = `SvSeeds directory: ${this.#getRelativePath()}`;
-    const hint = "Create dirs if not exists";
-    if (!(await Toggle.prompt({ message, hint, default: true }))) Log.cancel();
+    if (this.#exists && !this.#files.length) return;
+    const info = this.#exists ? "File already exists in the directory." : `Directory not found: ${this.#getRelativePath()}`;
+    const message = this.#exists ? "Do you want to proceed?" : "Create directory and proceed?";
+    log.info(info);
+    const result = await confirm({ message });
+    if (isCancel(result) || !result) Flow.cancel();
   }
   getExists(files: string[]): string[] {
     return this.#files.filter((x) => files.includes(x));
@@ -273,30 +284,34 @@ class Destination {
   }
 }
 
-class Log {
+class Flow {
   static #CANCEL_CODE = -1;
   #code = 0;
 
-  show(e: unknown) {
-    Log.show(e);
-    if (e instanceof Error && e.cause !== Log.#CANCEL_CODE) this.#code = 1;
+  showError(e: unknown) {
+    if (!(e instanceof Error && e.cause === Flow.#CANCEL_CODE)) this.#code = 1;
+    Flow.showError(e);
   }
   exitError() {
     if (this.#code) Deno.exit(this.#code);
   }
 
   static warn(msg: string) {
-    console.warn(`${yellow("warn:")} ${msg}`);
+    log.warn(`warn: ${msg}`);
   }
   static error(msg: string) {
-    throw new Error(`${red("error:")} ${msg}`);
+    throw new Error(`error: ${msg}`);
   }
   static cancel() {
-    throw new Error(red("cancelled"), { cause: Log.#CANCEL_CODE });
+    throw new Error("cancelled", { cause: Flow.#CANCEL_CODE });
   }
-  static show(e: unknown) {
+  static showError(e: unknown) {
     if (e instanceof Error) {
-      console.error(`${e.message}`);
+      if (e.cause === Flow.#CANCEL_CODE) {
+        cancel(e.message);
+      } else {
+        log.error(e.message);
+      }
     } else {
       throw e;
     }
